@@ -11,9 +11,9 @@ LED_DMA        = 10
 LED_BRIGHTNESS = 65
 LED_INVERT     = False
 LED_CHANNEL    = 0
-AUDIO_DEVICE   = "hw:1,0"
+AUDIO_DEVICE   = "hw:3,0"
 BEEP_FILE      = "alert.mp3"
-ALARM_FILE     = "alarm.mp3"
+CALM_FILE      = "calm.mp3"
 
 class ActuatorSystem:
     def __init__(self):
@@ -68,9 +68,8 @@ class ActuatorSystem:
             self.current_state["audio_status"] = f"PLAYING {sound_type}"
             if sound_type == "BEEP":
                 os.system(f'mpg123 -a {AUDIO_DEVICE} "{BEEP_FILE}" >/dev/null 2>&1 &')
-            elif sound_type == "ALARM":
-                os.system(f'mpg123 -a {AUDIO_DEVICE} "{ALARM_FILE}" >/dev/null 2>&1 &')
-            
+            elif sound_type == "CALM":
+                os.system(f'mpg123 -a {AUDIO_DEVICE} "{CALM_FILE}" >/dev/null 2>&1 &')
             # Reset status after short delay (approx length of sound)
             threading.Timer(1.0, lambda: self.current_state.update({"audio_status": "SILENT"})).start()
         except:
@@ -98,3 +97,23 @@ class ActuatorSystem:
             # OFF
             self._color_wipe(Color(0, 0, 0), "OFF")
             time.sleep(0.15)
+
+# --- Quick Test to verify functionality ---
+if __name__ == "__main__":
+    actuators = ActuatorSystem()
+    print("🔎 Testing Actuators... (Press Ctrl+C to stop)")
+    try:
+        while True:
+            actuators.set_mood_lighting("CALM")
+            actuators.play_sound("CALM")
+            time.sleep(5)
+            actuators.set_mood_lighting("WARM")
+            time.sleep(5)
+            actuators.set_mood_lighting("ALERT")
+            time.sleep(5)
+            actuators.activate_emergency_protocol(True)
+            time.sleep(10)
+            actuators.activate_emergency_protocol(False)
+    except KeyboardInterrupt:
+        actuators.set_mood_lighting("OFF")
+        print("\n✅ Actuator test ended.")
