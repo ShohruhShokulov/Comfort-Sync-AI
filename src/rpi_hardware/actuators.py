@@ -12,8 +12,8 @@ LED_BRIGHTNESS = 65
 LED_INVERT     = False
 LED_CHANNEL    = 0
 AUDIO_DEVICE   = "hw:3,0"
-BEEP_FILE      = "alert.mp3"
-CALM_FILE      = "calm.mp3"
+BEEP_FILE      = "data/alert.mp3"
+CALM_FILE      = "data/calm.mp3"
 
 class ActuatorSystem:
     def __init__(self):
