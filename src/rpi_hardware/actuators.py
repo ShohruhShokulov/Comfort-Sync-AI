@@ -119,9 +119,7 @@ if __name__ == "__main__":
             time.sleep(5)
             actuators.activate_emergency_protocol(True)
             time.sleep(10)
-            actuators.stop_sound()
             actuators.activate_emergency_protocol(False)
-            actuators.stop_sound()
     except KeyboardInterrupt:
         actuators.set_mood_lighting("OFF")
         print("\n✅ Actuator test ended.")
