@@ -6,7 +6,7 @@ from sensors import SensorManager
 from actuators import ActuatorSystem
 import sys
 sys.path.append('../simulate')
-from simulate import SmartWatchSimulator, StressScenario
+from data_generator import SmartWatchSimulator, StressScenario
 
 class ComfortLevel(Enum):
     COMFORTABLE = "comfortable"
