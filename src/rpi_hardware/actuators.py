@@ -34,6 +34,38 @@ class ActuatorSystem:
 
         self.emergency_active = False
         self.emergency_thread = None
+        
+        # Realistic cabin lighting color schemes (RGB values)
+        self.cabin_colors = {
+            # Normal comfortable cabin lighting
+            'cabin_day': (255, 240, 220),          # Warm white daylight
+            'cabin_evening': (255, 200, 150),      # Warmer evening light
+            'cabin_night': (100, 80, 60),          # Dim warm for night
+            
+            # Calming colors for stress relief
+            'calming_blue': (100, 150, 255),       # Soft blue (cooling effect)
+            'calming_soft': (200, 220, 255),       # Very soft blue-white
+            'nature_green': (150, 255, 180),       # Natural green
+            
+            # Temperature-based colors
+            'cooling': (150, 200, 255),            # Cool blue-white
+            'cooling_intense': (80, 150, 255),     # Strong cool blue
+            'warming': (255, 180, 100),            # Warm orange-yellow
+            'warming_intense': (255, 150, 80),     # Strong warm orange
+            
+            # Neutral states
+            'neutral_warm': (255, 220, 180),       # Neutral warm white
+            'neutral_cool': (220, 235, 255),       # Neutral cool white
+        }
+        
+        # Sound profiles mapped to actual audio files
+        self.sound_profiles = {
+            'calming_deep': CALM_FILE,
+            'nature_calm': CALM_FILE,
+            'ambient_soft': CALM_FILE,
+            'white_noise_cooling': CALM_FILE,
+            'alert': BEEP_FILE,
+        }
 
     def get_state(self):
         """Returns the real-time status of lights and sound."""
@@ -62,23 +94,82 @@ class ActuatorSystem:
             self._color_wipe(Color(255, 200, 0), "WARNING ORANGE")
         else:
             self._color_wipe(Color(0, 0, 0), "OFF")
-
-    def play_sound(self, sound_type):
+    
+    def set_cabin_lighting(self, color_scheme, brightness=150):
+        """
+        Set cabin lighting with realistic color scheme for main controller
+        
+        Args:
+            color_scheme: Name from self.cabin_colors
+            brightness: 0-255
+        """
+        if self.emergency_active: return
+        
+        if color_scheme not in self.cabin_colors:
+            print(f"⚠️  Unknown color scheme: {color_scheme}, using cabin_day")
+            color_scheme = 'cabin_day'
+        
+        rgb = self.cabin_colors[color_scheme]
+        
+        # Apply brightness scaling
+        scale = brightness / 255.0
+        r = int(rgb[0] * scale)
+        g = int(rgb[1] * scale)
+        b = int(rgb[2] * scale)
+        
         try:
-            self.current_state["audio_status"] = f"PLAYING {sound_type}"
-            if sound_type == "BEEP":
-                os.system(f'mpg123 -a {AUDIO_DEVICE} "{BEEP_FILE}" >/dev/null 2>&1 &')
+            if not self.strip: return
+            
+            # Set all LEDs to the same color for cabin ambiance
+            for i in range(self.strip.numPixels()):
+                self.strip.setPixelColor(i, Color(r, g, b))
+            self.strip.show()
+            
+            self.current_state["light_mode"] = color_scheme
+            self.current_state["light_color"] = f"RGB({r},{g},{b})"
+            
+            print(f"   💡 Lighting: {color_scheme.replace('_', ' ').title()} "
+                  f"(RGB: {r},{g},{b}, Brightness: {brightness})")
+            
+        except Exception as e:
+            print(f"❌ LED error: {e}")
+
+    def play_sound(self, sound_type, volume=50):
+        """
+        Play sound using mpg123
+        
+        Args:
+            sound_type: either old style ("BEEP", "CALM") or new profile names
+            volume: 0-100 (currently not used with mpg123, but kept for compatibility)
+        """
+        try:
+            # Map new sound profiles to files, or use direct file for old style
+            if sound_type in self.sound_profiles:
+                audio_file = self.sound_profiles[sound_type]
+            elif sound_type == "BEEP":
+                audio_file = BEEP_FILE
             elif sound_type == "CALM":
-                os.system(f'mpg123 -a {AUDIO_DEVICE} "{CALM_FILE}" >/dev/null 2>&1 &')
-            # Reset status after short delay (approx length of sound)
+                audio_file = CALM_FILE
+            else:
+                print(f"⚠️  Unknown sound type: {sound_type}")
+                return
+            
+            self.current_state["audio_status"] = f"PLAYING {sound_type}"
+            os.system(f'mpg123 -a {AUDIO_DEVICE} "{audio_file}" >/dev/null 2>&1 &')
+            
+            # Reset status after short delay
             threading.Timer(1.0, lambda: self.current_state.update({"audio_status": "SILENT"})).start()
-        except:
-            pass
-        self.current_state["audio_status"] = "SILENT"
+            
+            print(f"   🔊 Audio: {sound_type} (File: {os.path.basename(audio_file)})")
+            
+        except Exception as e:
+            print(f"❌ Audio error: {e}")
+            self.current_state["audio_status"] = "SILENT"
 
     def stop_sound(self):
         os.system("pkill mpg123")
         self.current_state["audio_status"] = "SILENT"
+        print(f"   🔇 Audio: Stopped")
     
     def activate_emergency_protocol(self, active=True):
         if active:
@@ -102,6 +193,12 @@ class ActuatorSystem:
             # OFF
             self._color_wipe(Color(0, 0, 0), "OFF")
             time.sleep(0.15)
+    
+    def cleanup(self):
+        """Clean up resources"""
+        self.stop_sound()
+        if self.strip:
+            self._color_wipe(Color(0, 0, 0), "OFF")
 
 # --- Quick Test to verify functionality ---
 if __name__ == "__main__":

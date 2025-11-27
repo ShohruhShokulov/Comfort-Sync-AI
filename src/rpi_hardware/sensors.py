@@ -60,7 +60,7 @@ class EnvironmentSensors:
                 # We just ignore this frame's data.
                 pass 
             except Exception as error:
-                print(f"⚠️ DHT Read Error: {error}")
+                print(f"DHT Read Error: {error}")
 
         # --- READ MQ135 ---
         if self.mq_channel:
@@ -70,15 +70,103 @@ class EnvironmentSensors:
                 data["air_voltage"] = round(voltage, 3)
                 data["air_quality"] = self.read_air_quality(voltage)
             except Exception as error:
-                print(f"⚠️ MQ135 Read Error: {error}")
+                print(f"MQ135 Read Error: {error}")
 
         return data
 
+class SensorManager:
+    def __init__(self):
+        self.environment_sensors = EnvironmentSensors()
+        print("✓ Sensor Manager initialized")
+    
+    def read_dht22(self):
+        """
+        Read temperature and humidity from DHT22 sensor
+        Returns:
+            tuple: (temperature, humidity)
+        """
+        data = {
+            "temp": None,
+            "humidity": None
+        }
+
+        if self.environment_sensors.dht_sensor:
+            try:
+                data["temp"] = self.environment_sensors.dht_sensor.temperature
+                data["humidity"] = self.environment_sensors.dht_sensor.humidity
+            except RuntimeError as error:
+                pass 
+            except Exception as error:
+                print(f"DHT Read Error: {error}")
+
+        return data["temp"], data["humidity"]
+
+    def read_mq135(self):
+        """
+        Read air quality from MQ135 sensor
+        Returns:
+            int: Air quality index
+        """
+        data = {
+            "air_voltage": None,
+            "air_quality": "Unknown"
+        }
+
+        if self.environment_sensors.mq_channel:
+            try:
+                voltage = self.environment_sensors.mq_channel.voltage
+                data["air_voltage"] = round(voltage, 3)
+                data["air_quality"] = self.environment_sensors.read_air_quality(voltage)
+            except Exception as error:
+                print(f"MQ135 Read Error: {error}")
+
+        return data["air_quality"]
+
+    def read_all(self):
+        """
+        Read all sensors and return combined data dictionary
+        Compatible with main_controller.py
+        
+        Returns:
+            dict: {'temperature': float, 'humidity': float, 'air_quality': int}
+        """
+        temp, humidity = self.read_dht22()
+        air_quality = self.read_mq135()
+        
+        return {
+            'temperature': temp,
+            'humidity': humidity,
+            'air_quality': air_quality,
+            'timestamp': time.time()
+        }
+    
+    def get_sensor_status(self):
+        """
+        Get current status of all sensors
+        Returns dict with sensor readings and status
+        """
+        data = self.read_all()
+        
+        return {
+            'sensors': {
+                'dht22': {
+                    'temperature': data['temperature'],
+                    'humidity': data['humidity'],
+                    'status': 'OK' if data['temperature'] > 0 else 'ERROR'
+                },
+                'mq135': {
+                    'air_quality': data['air_quality'],
+                    'status': 'OK' if data['air_quality'] >= 0 else 'ERROR'
+                }
+            },
+            'timestamp': data['timestamp']
+        }
+
 # --- Quick Test to verify wiring ---
 if __name__ == "__main__":
-    sensors = EnvironmentSensors()
+    manager = SensorManager()
     print("🔎 Testing Sensors... (Press Ctrl+C to stop)")
     while True:
-        reading = sensors.read_data()
-        print(f"🌡️ Temp: {reading['temp']}C | 💧 Hum: {reading['humidity']}% | 💨 Air: {reading['air_quality']} ({reading['air_voltage']}V)")
+        status = manager.get_sensor_status()
+        print(f"🌡️ Temp: {status['sensors']['dht22']['temperature']}C | Hum: {status['sensors']['dht22']['humidity']}% | Air: {status['sensors']['mq135']['air_quality']} ({status['sensors']['mq135']['air_quality']}V)")
         time.sleep(2)
