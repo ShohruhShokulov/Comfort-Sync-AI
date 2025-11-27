@@ -74,7 +74,12 @@ class ActuatorSystem:
             threading.Timer(1.0, lambda: self.current_state.update({"audio_status": "SILENT"})).start()
         except:
             pass
+        self.current_state["audio_status"] = "SILENT"
 
+    def stop_sound(self):
+        os.system("pkill mpg123")
+        self.current_state["audio_status"] = "SILENT"
+    
     def activate_emergency_protocol(self, active=True):
         if active:
             if not self.emergency_active:
@@ -106,14 +111,17 @@ if __name__ == "__main__":
         while True:
             actuators.set_mood_lighting("CALM")
             actuators.play_sound("CALM")
-            time.sleep(5)
+            time.sleep(20)
+            actuators.stop_sound()
             actuators.set_mood_lighting("WARM")
             time.sleep(5)
             actuators.set_mood_lighting("ALERT")
             time.sleep(5)
             actuators.activate_emergency_protocol(True)
             time.sleep(10)
+            actuators.stop_sound()
             actuators.activate_emergency_protocol(False)
+            actuators.stop_sound()
     except KeyboardInterrupt:
         actuators.set_mood_lighting("OFF")
         print("\n✅ Actuator test ended.")
