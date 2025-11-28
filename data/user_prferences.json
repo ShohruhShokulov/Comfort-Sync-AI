@@ -1,0 +1,55 @@
+{
+  "user_id": "shohruh",
+  "total_sessions": 0,
+  "preferences": {
+    "happy": {
+      "color": "cabin_evening",
+      "brightness": 180,
+      "audio": "uplifting_ambient",
+      "volume": 40
+    },
+    "neutral": {
+      "color": "cabin_day",
+      "brightness": 130,
+      "audio": "ambient_soft",
+      "volume": 30
+    },
+    "sad": {
+      "color": "warming",
+      "brightness": 190,
+      "audio": "fireplace_crackling",
+      "volume": 45
+    },
+    "angry": {
+      "color": "calming_blue",
+      "brightness": 200,
+      "audio": "ocean_waves",
+      "volume": 50
+    },
+    "fear": {
+      "color": "calming_soft",
+      "brightness": 220,
+      "audio": "meditation_calm",
+      "volume": 55
+    }
+  },
+  "comfort_zones": {
+    "temperature": {
+      "min": 20,
+      "max": 26,
+      "preferred": 23
+    },
+    "humidity": {
+      "min": 40,
+      "max": 60,
+      "preferred": 50
+    },
+    "stress": {
+      "comfortable_max": 40
+    },
+    "heart_rate": {
+      "comfortable_max": 85
+    }
+  },
+  "learning_history": []
+}

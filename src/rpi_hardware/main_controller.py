@@ -10,6 +10,7 @@ import sys
 sys.path.append('../simulate')
 from data_generator import SmartWatchSimulator, StressScenario
 from decision_model import EnvironmentDecisionModel
+from personalization_model import PersonalizationModel
 
 class ComfortLevel(Enum):
     COMFORTABLE = "comfortable"
@@ -18,7 +19,7 @@ class ComfortLevel(Enum):
     CRITICAL = "critical"
 
 class MainController:
-    def __init__(self, mqtt_broker="127.0.0.1", mqtt_port=1883):
+    def __init__(self, mqtt_broker="127.0.0.1", mqtt_port=1883, user_id="user_default"):
         print("="*70)
         print("🚀 Comfort Sync AI - Initializing Main Controller")
         print("="*70)
@@ -68,6 +69,13 @@ class MainController:
         
         # Decision model for environment control
         self.decision_model = EnvironmentDecisionModel(window_seconds=20)
+        
+        # Personalization model
+        self.personalization = PersonalizationModel(user_id=user_id)
+        self.use_personalization = True  # Toggle between generic and personalized
+        
+        # Track previous comfort level for learning
+        self.previous_comfort_score = 50
         
         # Try to connect to MQTT
         self.connect_mqtt()
@@ -274,6 +282,7 @@ class MainController:
         
         print("\n" + "="*70)
         print("▶️  Starting Comfort Sync AI Control Loop")
+        print(f"   Personalization: {'ENABLED' if self.use_personalization else 'DISABLED'}")
         print("="*70 + "\n")
         
         try:
@@ -289,6 +298,10 @@ class MainController:
                 # Add data to decision model
                 self.decision_model.add_data_point(sensor_data, watch_data, self.current_emotion)
                 
+                # Calculate comfort score
+                comfort_score = self.personalization.get_comfort_score(sensor_data, watch_data)
+                comfort_improved = comfort_score > self.previous_comfort_score
+                
                 # Display sensor readings
                 print(f"\n📡 Sensor Readings:")
                 print(f"   🌡️  Temperature: {sensor_data['temperature']:.1f}°C")
@@ -302,27 +315,68 @@ class MainController:
                 decision = self.decision_model.make_decision()
                 
                 if decision:
-                    print(f"\n🎯 NEW ENVIRONMENT DECISION (based on last 20 seconds):")
-                    print(f"   Decision: {decision['description']}")
-                    print(f"   Dominant Emotion: {decision['analytics']['dominant_emotion']}")
-                    print(f"   Avg Stress: {decision['analytics']['avg_stress']:.1f}%")
-                    print(f"   Avg Heart Rate: {decision['analytics']['avg_heart_rate']:.0f} bpm")
-                    print(f"   Avg Temperature: {decision['analytics']['avg_temp']:.1f}°C")
-                    
-                    # Apply the decision
-                    self.actuators.set_cabin_lighting(
-                        decision['color_scheme'], 
-                        brightness=decision['brightness']
-                    )
-                    
-                    # Music always plays, just changes tracks
-                    self.actuators.play_sound(decision['audio'], volume=decision['volume'])
-                    
+                    # Choose between generic and personalized decision
+                    if self.use_personalization:
+                        personalized_env = self.personalization.get_personalized_environment(
+                            self.current_emotion, 
+                            sensor_data, 
+                            watch_data
+                        )
+                        
+                        print(f"\nPERSONALIZED ENVIRONMENT DECISION (based on last 20 seconds):")
+                        print(f"   {personalized_env['description']}")
+                        print(f"   Emotion: {self.current_emotion}")
+                        print(f"   Comfort Score: {comfort_score:.0f}/100")
+                        print(f"   Color: {personalized_env['color']}")
+                        print(f"   Audio: {personalized_env['audio']}")
+                        
+                        # Record feedback about previous environment
+                        if iteration > 0:
+                            prev_env = self.decision_model.get_current_environment()
+                            self.personalization.record_feedback(
+                                prev_env, 
+                                sensor_data, 
+                                watch_data, 
+                                self.current_emotion,
+                                comfort_improved
+                            )
+                        
+                        # Apply personalized environment
+                        self.actuators.set_cabin_lighting(
+                            personalized_env['color'], 
+                            brightness=personalized_env['brightness']
+                        )
+                        self.actuators.play_sound(personalized_env['audio'], volume=personalized_env['volume'])
+                        
+                    else:
+                        # Use generic decision model
+                        print(f"\nNEW ENVIRONMENT DECISION (based on last 20 seconds):")
+                        print(f"   Decision: {decision['description']}")
+                        print(f"   Dominant Emotion: {decision['analytics']['dominant_emotion']}")
+                        print(f"   Avg Stress: {decision['analytics']['avg_stress']:.1f}%")
+                        print(f"   Avg Heart Rate: {decision['analytics']['avg_heart_rate']:.0f} bpm")
+                        print(f"   Avg Temperature: {decision['analytics']['avg_temp']:.1f}°C")
+                        
+                        # Apply the decision
+                        self.actuators.set_cabin_lighting(
+                            decision['color_scheme'], 
+                            brightness=decision['brightness']
+                        )
+                        self.actuators.play_sound(decision['audio'], volume=decision['volume'])
+                
                 else:
                     # Show current environment
                     current_env = self.decision_model.get_current_environment()
                     print(f"\n🔄 Current Environment: {current_env['description']}")
-                    print(f"   🎵 Playing: {current_env['audio']} at {current_env['volume']}% volume")
+                    print(f"   🎵 Playing: {current_env.get('audio', 'N/A')}")
+                    print(f"   💯 Comfort Score: {comfort_score:.0f}/100")
+                
+                # Learn from session every 10 decisions (every ~200 seconds)
+                if iteration > 0 and iteration % 100 == 0 and self.use_personalization:
+                    self.personalization.learn_from_session()
+                
+                # Update previous comfort score
+                self.previous_comfort_score = comfort_score
                 
                 # Auto-change smartwatch scenario for testing (every 30 iterations)
                 if iteration > 0 and iteration % 15 == 0:
@@ -338,6 +392,10 @@ class MainController:
                 
         except KeyboardInterrupt:
             print("\n\n⚠️  Control loop interrupted by user")
+            # Save learning before exit
+            if self.use_personalization and self.personalization.session_data:
+                print("💾 Saving session learning...")
+                self.personalization.learn_from_session()
         except Exception as e:
             print(f"\n❌ Error in control loop: {e}")
             import traceback
@@ -385,7 +443,8 @@ class MainController:
         print("✓ Controller stopped")
 
 if __name__ == "__main__":
-    controller = MainController()
+    # You can specify user_id for personalization
+    controller = MainController(user_id="shohruh_demo")
     controller.start()
     
     try:
