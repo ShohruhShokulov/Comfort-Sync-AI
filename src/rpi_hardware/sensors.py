@@ -6,10 +6,9 @@ from adafruit_ads1x15.ads1115 import ADS1115
 from adafruit_ads1x15.analog_in import AnalogIn
 import adafruit_ads1x15.ads1x15 as ads1x15
 
-class EnvironmentSensors:
+class SensorManager:
     def __init__(self):
         # --- 1. SETUP DHT22 (Temperature & Humidity) ---
-        # Using GPIO4 as per your wiring
         try:
             self.dht_sensor = adafruit_dht.DHT22(board.D4)
             print("✅ DHT22 Sensor initialized on Pin D4")
@@ -18,7 +17,6 @@ class EnvironmentSensors:
             self.dht_sensor = None
 
         # --- 2. SETUP MQ135 (Air Quality via ADC) ---
-        # Using I2C (SCL/SDA) and ADS1115 at 0x48
         try:
             self.i2c = busio.I2C(board.SCL, board.SDA)
             self.ads = ADS1115(self.i2c, address=0x48)
@@ -27,100 +25,64 @@ class EnvironmentSensors:
         except Exception as e:
             print(f"❌ Error initializing MQ135/ADS1115: {e}")
             self.mq_channel = None
-
-    def read_air_quality(self, voltage):
-        """
-        Classifies air quality based on the voltage thresholds you provided.
-        """
-        if voltage < 0.30: return "Excellent"
-        elif voltage < 0.45: return "Good"
-        elif voltage < 0.60: return "Moderate"
-        elif voltage < 0.80: return "Poor"
-        else: return "Hazardous"
-
-    def read_data(self):
-        """
-        Returns a dictionary with current sensor readings.
-        Handles errors gracefully (returns None for missing data).
-        """
-        data = {
-            "temp": None,
-            "humidity": None,
-            "air_voltage": None,
-            "air_quality": "Unknown"
-        }
-
-        # --- READ DHT22 ---
-        if self.dht_sensor:
-            try:
-                data["temp"] = self.dht_sensor.temperature
-                data["humidity"] = self.dht_sensor.humidity
-            except RuntimeError as error:
-                # DHT sensors are slow and often fail to read; this is normal.
-                # We just ignore this frame's data.
-                pass 
-            except Exception as error:
-                print(f"DHT Read Error: {error}")
-
-        # --- READ MQ135 ---
-        if self.mq_channel:
-            try:
-                raw = self.mq_channel.value
-                voltage = self.mq_channel.voltage
-                data["air_voltage"] = round(voltage, 3)
-                data["air_quality"] = self.read_air_quality(voltage)
-            except Exception as error:
-                print(f"MQ135 Read Error: {error}")
-
-        return data
-
-class SensorManager:
-    def __init__(self):
-        self.environment_sensors = EnvironmentSensors()
+        
         print("✓ Sensor Manager initialized")
-    
+
+    def classify_air_quality(self, voltage):
+        """
+        Classifies air quality based on voltage thresholds
+        Returns PPM estimate for compatibility with main controller
+        """
+        if voltage < 0.30:
+            return 50  # Excellent
+        elif voltage < 0.45:
+            return 100  # Good
+        elif voltage < 0.60:
+            return 200  # Moderate
+        elif voltage < 0.80:
+            return 300  # Poor
+        else:
+            return 400  # Hazardous
+
     def read_dht22(self):
         """
-        Read temperature and humidity from DHT22 sensor
-        Returns:
-            tuple: (temperature, humidity)
+        Read DHT22 sensor for temperature and humidity
+        Returns: (temperature, humidity) in Celsius and %
         """
-        data = {
-            "temp": None,
-            "humidity": None
-        }
-
-        if self.environment_sensors.dht_sensor:
-            try:
-                data["temp"] = self.environment_sensors.dht_sensor.temperature
-                data["humidity"] = self.environment_sensors.dht_sensor.humidity
-            except RuntimeError as error:
-                pass 
-            except Exception as error:
-                print(f"DHT Read Error: {error}")
-
-        return data["temp"], data["humidity"]
+        if not self.dht_sensor:
+            return 0.0, 0.0
+        
+        try:
+            temp = self.dht_sensor.temperature
+            humidity = self.dht_sensor.humidity
+            
+            if temp is not None and humidity is not None:
+                return round(temp, 1), round(humidity, 1)
+            else:
+                return 0.0, 0.0
+                
+        except RuntimeError as error:
+            # DHT sensors are slow and often fail to read; this is normal
+            return 0.0, 0.0
+        except Exception as error:
+            print(f"⚠️ DHT Read Error: {error}")
+            return 0.0, 0.0
 
     def read_mq135(self):
         """
-        Read air quality from MQ135 sensor
-        Returns:
-            int: Air quality index
+        Read MQ135 air quality sensor via ADS1115
+        Returns: air quality in PPM estimate
         """
-        data = {
-            "air_voltage": None,
-            "air_quality": "Unknown"
-        }
-
-        if self.environment_sensors.mq_channel:
-            try:
-                voltage = self.environment_sensors.mq_channel.voltage
-                data["air_voltage"] = round(voltage, 3)
-                data["air_quality"] = self.environment_sensors.read_air_quality(voltage)
-            except Exception as error:
-                print(f"MQ135 Read Error: {error}")
-
-        return data["air_quality"]
+        if not self.mq_channel:
+            return 0
+        
+        try:
+            voltage = self.mq_channel.voltage
+            ppm = self.classify_air_quality(voltage)
+            return ppm
+        except Exception as error:
+            print(f"⚠️ MQ135 Read Error: {error}")
+            return 0
 
     def read_all(self):
         """
@@ -140,33 +102,55 @@ class SensorManager:
             'timestamp': time.time()
         }
     
-    def get_sensor_status(self):
+    def get_detailed_reading(self):
         """
-        Get current status of all sensors
-        Returns dict with sensor readings and status
+        Get detailed sensor reading with voltage info (for debugging)
         """
-        data = self.read_all()
-        
-        return {
-            'sensors': {
-                'dht22': {
-                    'temperature': data['temperature'],
-                    'humidity': data['humidity'],
-                    'status': 'OK' if data['temperature'] > 0 else 'ERROR'
-                },
-                'mq135': {
-                    'air_quality': data['air_quality'],
-                    'status': 'OK' if data['air_quality'] >= 0 else 'ERROR'
-                }
-            },
-            'timestamp': data['timestamp']
+        data = {
+            "temp": None,
+            "humidity": None,
+            "air_voltage": None,
+            "air_quality_ppm": None
         }
 
-# --- Quick Test to verify wiring ---
+        # Read DHT22
+        if self.dht_sensor:
+            try:
+                data["temp"] = self.dht_sensor.temperature
+                data["humidity"] = self.dht_sensor.humidity
+            except RuntimeError:
+                pass
+            except Exception as error:
+                print(f"⚠️ DHT Read Error: {error}")
+
+        # Read MQ135
+        if self.mq_channel:
+            try:
+                voltage = self.mq_channel.voltage
+                data["air_voltage"] = round(voltage, 3)
+                data["air_quality_ppm"] = self.classify_air_quality(voltage)
+            except Exception as error:
+                print(f"⚠️ MQ135 Read Error: {error}")
+
+        return data
+
+# Quick test
 if __name__ == "__main__":
-    manager = SensorManager()
+    sensors = SensorManager()
     print("🔎 Testing Sensors... (Press Ctrl+C to stop)")
-    while True:
-        status = manager.get_sensor_status()
-        print(f"🌡️ Temp: {status['sensors']['dht22']['temperature']}C | Hum: {status['sensors']['dht22']['humidity']}% | Air: {status['sensors']['mq135']['air_quality']} ({status['sensors']['mq135']['air_quality']}V)")
-        time.sleep(2)
+    try:
+        while True:
+            # Test read_all() method (for main controller)
+            data = sensors.read_all()
+            print(f"🌡️ Temp: {data['temperature']}°C | "
+                  f"💧 Hum: {data['humidity']}% | "
+                  f"💨 Air: {data['air_quality']} PPM")
+            
+            # Also show detailed reading
+            detailed = sensors.get_detailed_reading()
+            if detailed['air_voltage']:
+                print(f"   (Voltage: {detailed['air_voltage']}V)")
+            
+            time.sleep(2)
+    except KeyboardInterrupt:
+        print("\n✅ Sensor test ended.")

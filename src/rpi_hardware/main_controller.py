@@ -22,7 +22,7 @@ class MainController:
         
         # Initialize components
         self.sensors = SensorManager()
-        self.actuators = ActuatorSystem()
+        self.actuators = ActuatorSystem()  # Changed from ActuatorController
         self.smartwatch = SmartWatchSimulator()
         
         # Control state
