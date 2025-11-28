@@ -68,13 +68,20 @@ class ActuatorSystem:
             'soft_pink': (255, 200, 220),          # Gentle pink (soothing)
         }
         
-        # Sound profiles mapped to actual audio files
+        # Enhanced sound profiles mapped to actual audio files
         self.sound_profiles = {
+            # Existing
             'calming_deep': CALM_FILE,
             'nature_calm': CALM_FILE,
             'ambient_soft': CALM_FILE,
             'white_noise_cooling': CALM_FILE,
             'alert': BEEP_FILE,
+            
+            # New profiles for decision model
+            'ocean_waves': 'data/ocean_waves.mp3',          # Cool calming
+            'fireplace_crackling': 'data/fireplace.mp3',    # Warm comforting
+            'uplifting_ambient': 'data/uplifting.mp3',      # Energizing
+            'meditation_calm': 'data/meditation.mp3',       # Deep relaxation
         }
 
     def get_state(self):

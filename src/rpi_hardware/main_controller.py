@@ -9,6 +9,7 @@ from actuators import ActuatorSystem
 import sys
 sys.path.append('../simulate')
 from data_generator import SmartWatchSimulator, StressScenario
+from decision_model import EnvironmentDecisionModel
 
 class ComfortLevel(Enum):
     COMFORTABLE = "comfortable"
@@ -64,6 +65,9 @@ class MainController:
             'surprise': {'color': 'neutral_warm', 'brightness': 160, 'description': 'Gentle neutral'},
             'disgust': {'color': 'nature_green', 'brightness': 150, 'description': 'Fresh natural green'},
         }
+        
+        # Decision model for environment control
+        self.decision_model = EnvironmentDecisionModel(window_seconds=20)
         
         # Try to connect to MQTT
         self.connect_mqtt()
@@ -282,6 +286,9 @@ class MainController:
                 sensor_data = self.sensors.read_all()
                 watch_data = self.smartwatch.get_data()
                 
+                # Add data to decision model
+                self.decision_model.add_data_point(sensor_data, watch_data, self.current_emotion)
+                
                 # Display sensor readings
                 print(f"\n📡 Sensor Readings:")
                 print(f"   🌡️  Temperature: {sensor_data['temperature']:.1f}°C")
@@ -291,21 +298,31 @@ class MainController:
                 print(f"   📊 Stress Level: {watch_data['stress_level']:.1f}%")
                 print(f"   😊 Emotion: {self.current_emotion}")
                 
-                # Calculate discomfort and determine action
-                discomfort_score, issues = self.calculate_discomfort_score(sensor_data, watch_data)
-                comfort_level = self.determine_comfort_level(discomfort_score)
+                # Make environment decision (only once every 20 seconds)
+                decision = self.decision_model.make_decision()
                 
-                print(f"\n🎯 Analysis:")
-                print(f"   Discomfort Score: {discomfort_score}/10")
-                print(f"   Comfort Level: {comfort_level.value.upper()}")
-                
-                # Apply adjustments if comfort level changed
-                if comfort_level != self.current_comfort_level:
-                    print(f"   Status Changed: {self.current_comfort_level.value} → {comfort_level.value}")
-                    self.current_comfort_level = comfort_level
-                
-                # Apply comfort adjustments
-                self.apply_comfort_adjustments(comfort_level, sensor_data, watch_data, issues)
+                if decision:
+                    print(f"\n🎯 NEW ENVIRONMENT DECISION (based on last 20 seconds):")
+                    print(f"   Decision: {decision['description']}")
+                    print(f"   Dominant Emotion: {decision['analytics']['dominant_emotion']}")
+                    print(f"   Avg Stress: {decision['analytics']['avg_stress']:.1f}%")
+                    print(f"   Avg Heart Rate: {decision['analytics']['avg_heart_rate']:.0f} bpm")
+                    print(f"   Avg Temperature: {decision['analytics']['avg_temp']:.1f}°C")
+                    
+                    # Apply the decision
+                    self.actuators.set_cabin_lighting(
+                        decision['color_scheme'], 
+                        brightness=decision['brightness']
+                    )
+                    
+                    if decision['audio']:
+                        self.actuators.play_sound(decision['audio'], volume=decision['volume'])
+                    else:
+                        self.actuators.stop_sound()
+                else:
+                    # Show current environment
+                    current_env = self.decision_model.get_current_environment()
+                    print(f"\n🔄 Current Environment: {current_env['description']}")
                 
                 # Auto-change smartwatch scenario for testing (every 30 iterations)
                 if iteration > 0 and iteration % 15 == 0:
