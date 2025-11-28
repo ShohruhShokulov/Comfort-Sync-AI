@@ -1,0 +1,9 @@
+numpy
+paho-mqtt
+opencv-python
+deepface
+rpi_ws281x
+adafruit-circuitpython-dht
+adafruit-circuitpython-ads1x15
+adafruit-blinka
+RPi.GPIO
