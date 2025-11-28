@@ -315,14 +315,14 @@ class MainController:
                         brightness=decision['brightness']
                     )
                     
-                    if decision['audio']:
-                        self.actuators.play_sound(decision['audio'], volume=decision['volume'])
-                    else:
-                        self.actuators.stop_sound()
+                    # Music always plays, just changes tracks
+                    self.actuators.play_sound(decision['audio'], volume=decision['volume'])
+                    
                 else:
                     # Show current environment
                     current_env = self.decision_model.get_current_environment()
                     print(f"\n🔄 Current Environment: {current_env['description']}")
+                    print(f"   🎵 Playing: {current_env['audio']} at {current_env['volume']}% volume")
                 
                 # Auto-change smartwatch scenario for testing (every 30 iterations)
                 if iteration > 0 and iteration % 15 == 0:
@@ -351,6 +351,16 @@ class MainController:
         
         self.running = True
         self.smartwatch.set_scenario(StressScenario.NORMAL)
+        
+        # Set default environment immediately
+        print("\n🎨 Setting default calming environment...")
+        default_env = self.decision_model.get_current_environment()
+        self.actuators.set_cabin_lighting(
+            default_env['color_scheme'], 
+            brightness=default_env['brightness']
+        )
+        self.actuators.play_sound(default_env['audio'], volume=default_env['volume'])
+        print(f"   {default_env['description']}")
         
         # Start control loop in separate thread
         self.control_thread = threading.Thread(target=self.control_loop, daemon=True)

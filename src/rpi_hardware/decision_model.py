@@ -21,12 +21,13 @@ class EnvironmentDecisionModel:
         self.stress_buffer = deque(maxlen=10)
         self.emotion_buffer = deque(maxlen=10)
         
-        # Current environment state
+        # Current environment state - Default calming blue with music
         self.current_environment = {
-            'color_scheme': 'cabin_day',
-            'brightness': 130,
-            'audio': None,
-            'volume': 0
+            'color_scheme': 'calming_soft',
+            'brightness': 160,
+            'audio': 'ambient_soft',
+            'volume': 35,
+            'description': 'Default calming environment (waiting for data)'
         }
         
         # Last decision time
@@ -162,7 +163,7 @@ class EnvironmentDecisionModel:
         # Choose best decision
         best_decision = max(decision_scores, key=decision_scores.get)
         
-        # Map decision to actual settings
+        # Map decision to actual settings - All decisions now have audio
         environment_map = {
             'calming_cool': {
                 'color_scheme': 'calming_blue',
@@ -188,8 +189,8 @@ class EnvironmentDecisionModel:
             'neutral_comfort': {
                 'color_scheme': 'cabin_day',
                 'brightness': 140,
-                'audio': None,
-                'volume': 0,
+                'audio': 'ambient_soft',
+                'volume': 30,
                 'description': 'Neutral comfortable environment'
             },
             'deep_relax': {

@@ -153,11 +153,11 @@ class ActuatorSystem:
 
     def play_sound(self, sound_type, volume=50):
         """
-        Play sound using mpg123
+        Play sound using mpg123 - Changes track smoothly
         
         Args:
             sound_type: either old style ("BEEP", "CALM") or new profile names
-            volume: 0-100 (currently not used with mpg123, but kept for compatibility)
+            volume: 0-100
         """
         try:
             # Map new sound profiles to files, or use direct file for old style
@@ -171,18 +171,21 @@ class ActuatorSystem:
                 print(f"⚠️  Unknown sound type: {sound_type}")
                 return
             
+            # Stop current music first for smooth transition
+            if pygame.mixer.music.get_busy():
+                self.stop_sound()
+                time.sleep(0.2)  # Brief pause for smooth transition
+            
             self.current_state["audio_status"] = f"PLAYING {sound_type}"
-            os.system(f'mpg123 -a {AUDIO_DEVICE} "{audio_file}" >/dev/null 2>&1 &')
+            os.system(f'mpg123 -a {AUDIO_DEVICE} --loop -1 "{audio_file}" >/dev/null 2>&1 &')
             
-            # Reset status after short delay
-            threading.Timer(1.0, lambda: self.current_state.update({"audio_status": "SILENT"})).start()
-            
-            print(f"   🔊 Audio: {sound_type} (File: {os.path.basename(audio_file)})")
+            self.current_sound = sound_type
+            print(f"   🎵 Audio: {sound_type} (File: {os.path.basename(audio_file)}, Volume: {volume}%, Looping)")
             
         except Exception as e:
             print(f"❌ Audio error: {e}")
-            self.current_state["audio_status"] = "SILENT"
-
+            self.current_state["audio_status"] = "ERROR"
+    
     def stop_sound(self):
         os.system("pkill mpg123")
         self.current_state["audio_status"] = "SILENT"
