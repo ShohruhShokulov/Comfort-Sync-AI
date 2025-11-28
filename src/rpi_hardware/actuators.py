@@ -87,7 +87,7 @@ class ActuatorSystem:
             # Decision model profiles (now using your actual files)
             'ocean_waves': 'data/ocean_waves.mp3',
             'fireplace_crackling': 'data/fireplace.mp3',
-            'uplifting_ambient': 'data/calm.mp3',
+            'uplifting_ambient': 'data/uplifting.mp3',
             'meditation_calm': 'data/meditation.mp3',
         }
 
