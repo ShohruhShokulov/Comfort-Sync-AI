@@ -23,11 +23,11 @@ class EnvironmentDecisionModel:
         
         # Current environment state - Default calming blue with music
         self.current_environment = {
-            'color_scheme': 'calming_soft',
-            'brightness': 160,
+            'color_scheme': 'ocean_blue',
+            'brightness': 180,
             'audio': 'ambient_soft',
             'volume': 35,
-            'description': 'Default calming environment (waiting for data)'
+            'description': 'Default ocean ambiance (waiting for data)'
         }
         
         # Last decision time
@@ -163,42 +163,42 @@ class EnvironmentDecisionModel:
         # Choose best decision
         best_decision = max(decision_scores, key=decision_scores.get)
         
-        # Map decision to actual settings - All decisions now have audio
+        # Map decision to actual settings - DISTINCT COLORS for each mode
         environment_map = {
             'calming_cool': {
-                'color_scheme': 'calming_blue',
+                'color_scheme': 'calming_blue',      # Sky blue
                 'brightness': 200,
                 'audio': 'ocean_waves',
                 'volume': 50,
-                'description': 'Cool calming environment'
+                'description': 'Cool calming environment (Sky Blue)'
             },
             'calming_warm': {
-                'color_scheme': 'warming',
+                'color_scheme': 'warming_intense',    # Warm orange
                 'brightness': 190,
                 'audio': 'fireplace_crackling',
                 'volume': 45,
-                'description': 'Warm comforting environment'
+                'description': 'Warm comforting environment (Sunset Orange)'
             },
             'energizing': {
-                'color_scheme': 'cabin_evening',
-                'brightness': 180,
+                'color_scheme': 'energizing_yellow',  # Bright yellow
+                'brightness': 200,
                 'audio': 'uplifting_ambient',
                 'volume': 40,
-                'description': 'Energizing positive environment'
+                'description': 'Energizing positive environment (Sunny Yellow)'
             },
             'neutral_comfort': {
-                'color_scheme': 'cabin_day',
-                'brightness': 140,
+                'color_scheme': 'cabin_evening',      # Sunset amber
+                'brightness': 160,
                 'audio': 'ambient_soft',
                 'volume': 30,
-                'description': 'Neutral comfortable environment'
+                'description': 'Neutral comfortable environment (Warm Amber)'
             },
             'deep_relax': {
-                'color_scheme': 'calming_soft',
+                'color_scheme': 'calming_purple',     # Lavender purple
                 'brightness': 220,
                 'audio': 'meditation_calm',
                 'volume': 55,
-                'description': 'Deep relaxation mode'
+                'description': 'Deep relaxation mode (Lavender Purple)'
             }
         }
         

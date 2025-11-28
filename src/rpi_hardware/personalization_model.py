@@ -16,19 +16,19 @@ class PersonalizationModel:
         self.user_id = user_id
         self.data_file = data_file
         
-        # User preference profile
+        # User preference profile with DISTINCT COLORS
         self.user_profile = {
             'user_id': user_id,
             'total_sessions': 0,
             'preferences': {
-                # Emotion -> preferred environment
-                'happy': {'color': 'cabin_evening', 'brightness': 180, 'audio': 'uplifting_ambient', 'volume': 40},
-                'neutral': {'color': 'cabin_day', 'brightness': 130, 'audio': 'ambient_soft', 'volume': 30},
-                'sad': {'color': 'warming', 'brightness': 190, 'audio': 'fireplace_crackling', 'volume': 45},
-                'angry': {'color': 'calming_blue', 'brightness': 200, 'audio': 'ocean_waves', 'volume': 50},
-                'fear': {'color': 'calming_soft', 'brightness': 220, 'audio': 'meditation_calm', 'volume': 55},
-                'surprise': {'color': 'neutral_warm', 'brightness': 160, 'audio': 'ambient_soft', 'volume': 35},
-                'disgust': {'color': 'nature_green', 'brightness': 150, 'audio': 'ambient_soft', 'volume': 30},
+                # Each emotion gets UNIQUE color
+                'happy': {'color': 'energizing_yellow', 'brightness': 200, 'audio': 'uplifting_ambient', 'volume': 40},
+                'neutral': {'color': 'cabin_evening', 'brightness': 160, 'audio': 'ambient_soft', 'volume': 30},
+                'sad': {'color': 'warming_intense', 'brightness': 190, 'audio': 'fireplace_crackling', 'volume': 45},
+                'angry': {'color': 'cooling_intense', 'brightness': 210, 'audio': 'ocean_waves', 'volume': 50},
+                'fear': {'color': 'calming_purple', 'brightness': 220, 'audio': 'meditation_calm', 'volume': 55},
+                'surprise': {'color': 'soft_pink', 'brightness': 180, 'audio': 'ambient_soft', 'volume': 35},
+                'disgust': {'color': 'nature_green', 'brightness': 170, 'audio': 'ocean_waves', 'volume': 35},
             },
             'comfort_zones': {
                 # Learned comfort ranges

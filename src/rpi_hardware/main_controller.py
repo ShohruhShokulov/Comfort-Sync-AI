@@ -323,12 +323,12 @@ class MainController:
                             watch_data
                         )
                         
-                        print(f"\nPERSONALIZED ENVIRONMENT DECISION (based on last 20 seconds):")
+                        print(f"\n🎯 PERSONALIZED ENVIRONMENT DECISION (based on last 20 seconds):")
                         print(f"   {personalized_env['description']}")
                         print(f"   Emotion: {self.current_emotion}")
                         print(f"   Comfort Score: {comfort_score:.0f}/100")
-                        print(f"   Color: {personalized_env['color']}")
-                        print(f"   Audio: {personalized_env['audio']}")
+                        print(f"   🎨 Color: {personalized_env['color'].replace('_', ' ').title()}")
+                        print(f"   🎵 Audio: {personalized_env['audio'].replace('_', ' ').title()}")
                         
                         # Record feedback about previous environment
                         if iteration > 0:
@@ -350,14 +350,13 @@ class MainController:
                         
                     else:
                         # Use generic decision model
-                        print(f"\nNEW ENVIRONMENT DECISION (based on last 20 seconds):")
-                        print(f"   Decision: {decision['description']}")
+                        print(f"\n🎯 NEW ENVIRONMENT DECISION (based on last 20 seconds):")
+                        print(f"   {decision['description']}")
                         print(f"   Dominant Emotion: {decision['analytics']['dominant_emotion']}")
                         print(f"   Avg Stress: {decision['analytics']['avg_stress']:.1f}%")
-                        print(f"   Avg Heart Rate: {decision['analytics']['avg_heart_rate']:.0f} bpm")
-                        print(f"   Avg Temperature: {decision['analytics']['avg_temp']:.1f}°C")
+                        print(f"   🎨 Color: {decision['color_scheme'].replace('_', ' ').title()}")
+                        print(f"   🎵 Audio: {decision['audio'].replace('_', ' ').title()}")
                         
-                        # Apply the decision
                         self.actuators.set_cabin_lighting(
                             decision['color_scheme'], 
                             brightness=decision['brightness']
@@ -410,14 +409,15 @@ class MainController:
         self.running = True
         self.smartwatch.set_scenario(StressScenario.NORMAL)
         
-        # Set default environment immediately
-        print("\n🎨 Setting default calming environment...")
+        # Set default environment immediately with VISIBLE color
+        print("\n🎨 Setting default ocean ambiance environment...")
         default_env = self.decision_model.get_current_environment()
         self.actuators.set_cabin_lighting(
             default_env['color_scheme'], 
             brightness=default_env['brightness']
         )
         self.actuators.play_sound(default_env['audio'], volume=default_env['volume'])
+        print(f"   Color: {default_env['color_scheme']} (Ocean Blue)")
         print(f"   {default_env['description']}")
         
         # Start control loop in separate thread

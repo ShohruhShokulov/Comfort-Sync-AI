@@ -35,52 +35,59 @@ class ActuatorSystem:
         self.emergency_active = False
         self.emergency_thread = None
         
-        # Enhanced realistic cabin lighting color schemes (RGB values)
+        # Track current state to avoid restarting same music/light
+        self.current_color_scheme = None
+        self.current_brightness = None
+        self.current_audio = None
+        self.current_volume = None
+        
+        # Realistic cabin/salon lighting color schemes with CLEAR DIFFERENCES (RGB values)
         self.cabin_colors = {
-            # Normal comfortable cabin lighting
-            'cabin_day': (255, 240, 220),          # Warm white daylight
-            'cabin_evening': (255, 200, 150),      # Warmer evening light
-            'cabin_night': (100, 80, 60),          # Dim warm for night
+            # Normal comfortable cabin lighting (Warm tones)
+            'cabin_day': (255, 235, 200),           # Bright warm white daylight
+            'cabin_evening': (255, 180, 120),       # Sunset orange-amber
+            'cabin_night': (180, 140, 100),         # Dim warm amber for night
             
-            # Calming colors for stress relief
-            'calming_blue': (100, 150, 255),       # Soft blue (cooling effect)
-            'calming_soft': (200, 220, 255),       # Very soft blue-white
-            'calming_purple': (180, 150, 255),     # Gentle lavender
+            # Calming colors for stress relief (Blue tones)
+            'calming_blue': (80, 180, 255),         # Sky blue (cooling effect)
+            'calming_soft': (150, 200, 255),        # Soft light blue
+            'calming_purple': (160, 120, 255),      # Gentle lavender purple
             
-            # Nature-inspired colors
-            'nature_green': (150, 255, 180),       # Natural green (disgust/refresh)
-            'ocean_blue': (120, 200, 255),         # Ocean blue (calming)
-            'forest_green': (100, 200, 150),       # Deep forest (grounding)
+            # Nature-inspired colors (Green tones)
+            'nature_green': (100, 255, 150),        # Fresh spring green
+            'ocean_blue': (80, 200, 240),           # Deep ocean blue
+            'forest_green': (80, 180, 120),         # Deep forest green
             
-            # Temperature-based colors
-            'cooling': (150, 200, 255),            # Cool blue-white
-            'cooling_intense': (80, 150, 255),     # Strong cool blue
-            'warming': (255, 180, 100),            # Warm orange-yellow
-            'warming_intense': (255, 150, 80),     # Strong warm orange
+            # Temperature-based colors (Strong contrast)
+            'cooling': (100, 200, 255),             # Cool cyan-blue
+            'cooling_intense': (50, 150, 255),      # Intense cool blue
+            'warming': (255, 160, 80),              # Warm sunset orange
+            'warming_intense': (255, 120, 50),      # Intense warm orange-red
             
             # Neutral states
-            'neutral_warm': (255, 220, 180),       # Neutral warm white
-            'neutral_cool': (220, 235, 255),       # Neutral cool white
+            'neutral_warm': (255, 220, 180),        # Soft warm beige
+            'neutral_cool': (200, 220, 255),        # Soft cool white-blue
             
-            # Emotional support colors
-            'energizing_yellow': (255, 240, 150),  # Bright energizing (happy)
-            'sunset_orange': (255, 160, 100),      # Sunset warmth (comforting)
-            'soft_pink': (255, 200, 220),          # Gentle pink (soothing)
+            # Emotional support colors (Unique tones)
+            'energizing_yellow': (255, 230, 100),   # Bright sunny yellow
+            'sunset_orange': (255, 140, 60),        # Deep sunset orange
+            'soft_pink': (255, 180, 200),           # Gentle rose pink
+            'deep_red': (255, 80, 80),              # Warm deep red
         }
         
         # Enhanced sound profiles mapped to actual audio files
         self.sound_profiles = {
-            # Existing
-            'calming_deep': CALM_FILE,
-            'nature_calm': CALM_FILE,
-            'ambient_soft': CALM_FILE,
-            'white_noise_cooling': CALM_FILE,
+            # Existing basic profiles
+            'calming_deep': 'data/meditation.mp3',
+            'nature_calm': 'data/ocean_waves.mp3',
+            'ambient_soft': 'data/calm.mp3',
+            'white_noise_cooling': 'data/ocean_waves.mp3',
             'alert': BEEP_FILE,
             
-            # New profiles for decision model
+            # Decision model profiles (now using your actual files)
             'ocean_waves': 'data/ocean_waves.mp3',
             'fireplace_crackling': 'data/fireplace.mp3',
-            'uplifting_ambient': 'data/uplifting.mp3',
+            'uplifting_ambient': 'data/calm.mp3',
             'meditation_calm': 'data/meditation.mp3',
         }
 
@@ -115,12 +122,14 @@ class ActuatorSystem:
     def set_cabin_lighting(self, color_scheme, brightness=150):
         """
         Set cabin lighting with realistic color scheme for main controller
-        
-        Args:
-            color_scheme: Name from self.cabin_colors
-            brightness: 0-255
+        Only changes if different from current
         """
         if self.emergency_active: return
+        
+        # Check if this is the same as current state
+        if self.current_color_scheme == color_scheme and self.current_brightness == brightness:
+            print(f"   💡 Lighting: Already set to {color_scheme} (skipping)")
+            return
         
         if color_scheme not in self.cabin_colors:
             print(f"⚠️  Unknown color scheme: {color_scheme}, using cabin_day")
@@ -145,7 +154,11 @@ class ActuatorSystem:
             self.current_state["light_mode"] = color_scheme
             self.current_state["light_color"] = f"RGB({r},{g},{b})"
             
-            print(f"   💡 Lighting: {color_scheme.replace('_', ' ').title()} "
+            # Update tracking
+            self.current_color_scheme = color_scheme
+            self.current_brightness = brightness
+            
+            print(f"   💡 Lighting CHANGED: {color_scheme.replace('_', ' ').title()} "
                   f"(RGB: {r},{g},{b}, Brightness: {brightness})")
             
         except Exception as e:
@@ -154,11 +167,13 @@ class ActuatorSystem:
     def play_sound(self, sound_type, volume=50):
         """
         Play sound using mpg123 with looping
-        
-        Args:
-            sound_type: sound profile name
-            volume: 0-100
+        Only changes if different from current
         """
+        # Check if this is the same as current audio
+        if self.current_audio == sound_type and self.current_volume == volume:
+            print(f"   🎵 Audio: Already playing {sound_type} (skipping)")
+            return
+        
         try:
             # Map sound profiles to files
             if sound_type in self.sound_profiles:
@@ -177,25 +192,35 @@ class ActuatorSystem:
                 audio_file = CALM_FILE
             
             # Stop current music first
-            os.system("pkill mpg123")
-            time.sleep(0.1)
+            os.system("pkill mpg123 2>/dev/null")
+            time.sleep(0.2)  # Wait for process to stop
             
             self.current_state["audio_status"] = f"PLAYING {sound_type}"
             
             # Play with infinite loop (-1)
             os.system(f'mpg123 -a {AUDIO_DEVICE} --loop -1 "{audio_file}" >/dev/null 2>&1 &')
             
-            self.current_sound = sound_type
-            print(f"   🎵 Audio: {sound_type} (Looping continuously)")
+            # Update tracking
+            self.current_audio = sound_type
+            self.current_volume = volume
+            
+            print(f"   🎵 Audio CHANGED: {sound_type} → {os.path.basename(audio_file)} (Volume: {volume}%, Looping)")
             
         except Exception as e:
             print(f"❌ Audio error: {e}")
             self.current_state["audio_status"] = "ERROR"
 
     def stop_sound(self):
-        os.system("pkill mpg123")
-        self.current_state["audio_status"] = "SILENT"
-        print(f"   🔇 Audio: Stopped")
+        """Stop any playing sound"""
+        try:
+            os.system("pkill mpg123 2>/dev/null")
+            if self.current_audio:
+                print(f"   🔇 Audio: Stopped ({self.current_audio})")
+                self.current_audio = None
+                self.current_volume = None
+            self.current_state["audio_status"] = "SILENT"
+        except Exception as e:
+            print(f"❌ Audio stop error: {e}")
     
     def activate_emergency_protocol(self, active=True):
         if active:
@@ -222,9 +247,15 @@ class ActuatorSystem:
     
     def cleanup(self):
         """Clean up resources"""
+        print("\n🧹 Cleaning up actuators...")
         self.stop_sound()
         if self.strip:
-            self._color_wipe(Color(0, 0, 0), "OFF")
+            for i in range(self.strip.numPixels()):
+                self.strip.setPixelColor(i, Color(0, 0, 0))
+            self.strip.show()
+        self.current_color_scheme = None
+        self.current_brightness = None
+        self.current_audio = None
 
 # --- Quick Test to verify functionality ---
 if __name__ == "__main__":
