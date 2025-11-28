@@ -78,10 +78,10 @@ class ActuatorSystem:
             'alert': BEEP_FILE,
             
             # New profiles for decision model
-            'ocean_waves': 'data/ocean_waves.mp3',          # Cool calming
-            'fireplace_crackling': 'data/fireplace.mp3',    # Warm comforting
-            'uplifting_ambient': 'data/uplifting.mp3',      # Energizing
-            'meditation_calm': 'data/meditation.mp3',       # Deep relaxation
+            'ocean_waves': 'data/ocean_waves.mp3',
+            'fireplace_crackling': 'data/fireplace.mp3',
+            'uplifting_ambient': 'data/uplifting.mp3',
+            'meditation_calm': 'data/meditation.mp3',
         }
 
     def get_state(self):
@@ -153,14 +153,14 @@ class ActuatorSystem:
 
     def play_sound(self, sound_type, volume=50):
         """
-        Play sound using mpg123 - Changes track smoothly
+        Play sound using mpg123 with looping
         
         Args:
-            sound_type: either old style ("BEEP", "CALM") or new profile names
+            sound_type: sound profile name
             volume: 0-100
         """
         try:
-            # Map new sound profiles to files, or use direct file for old style
+            # Map sound profiles to files
             if sound_type in self.sound_profiles:
                 audio_file = self.sound_profiles[sound_type]
             elif sound_type == "BEEP":
@@ -168,24 +168,30 @@ class ActuatorSystem:
             elif sound_type == "CALM":
                 audio_file = CALM_FILE
             else:
-                print(f"⚠️  Unknown sound type: {sound_type}")
-                return
+                print(f"⚠️  Unknown sound type: {sound_type}, using default")
+                audio_file = CALM_FILE
             
-            # Stop current music first for smooth transition
-            if pygame.mixer.music.get_busy():
-                self.stop_sound()
-                time.sleep(0.2)  # Brief pause for smooth transition
+            # Check if file exists
+            if not os.path.exists(audio_file):
+                print(f"⚠️  Audio file not found: {audio_file}, using {CALM_FILE}")
+                audio_file = CALM_FILE
+            
+            # Stop current music first
+            os.system("pkill mpg123")
+            time.sleep(0.1)
             
             self.current_state["audio_status"] = f"PLAYING {sound_type}"
+            
+            # Play with infinite loop (-1)
             os.system(f'mpg123 -a {AUDIO_DEVICE} --loop -1 "{audio_file}" >/dev/null 2>&1 &')
             
             self.current_sound = sound_type
-            print(f"   🎵 Audio: {sound_type} (File: {os.path.basename(audio_file)}, Volume: {volume}%, Looping)")
+            print(f"   🎵 Audio: {sound_type} (Looping continuously)")
             
         except Exception as e:
             print(f"❌ Audio error: {e}")
             self.current_state["audio_status"] = "ERROR"
-    
+
     def stop_sound(self):
         os.system("pkill mpg123")
         self.current_state["audio_status"] = "SILENT"
