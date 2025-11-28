@@ -35,7 +35,7 @@ class ActuatorSystem:
         self.emergency_active = False
         self.emergency_thread = None
         
-        # Realistic cabin lighting color schemes (RGB values)
+        # Enhanced realistic cabin lighting color schemes (RGB values)
         self.cabin_colors = {
             # Normal comfortable cabin lighting
             'cabin_day': (255, 240, 220),          # Warm white daylight
@@ -45,7 +45,12 @@ class ActuatorSystem:
             # Calming colors for stress relief
             'calming_blue': (100, 150, 255),       # Soft blue (cooling effect)
             'calming_soft': (200, 220, 255),       # Very soft blue-white
-            'nature_green': (150, 255, 180),       # Natural green
+            'calming_purple': (180, 150, 255),     # Gentle lavender
+            
+            # Nature-inspired colors
+            'nature_green': (150, 255, 180),       # Natural green (disgust/refresh)
+            'ocean_blue': (120, 200, 255),         # Ocean blue (calming)
+            'forest_green': (100, 200, 150),       # Deep forest (grounding)
             
             # Temperature-based colors
             'cooling': (150, 200, 255),            # Cool blue-white
@@ -56,6 +61,11 @@ class ActuatorSystem:
             # Neutral states
             'neutral_warm': (255, 220, 180),       # Neutral warm white
             'neutral_cool': (220, 235, 255),       # Neutral cool white
+            
+            # Emotional support colors
+            'energizing_yellow': (255, 240, 150),  # Bright energizing (happy)
+            'sunset_orange': (255, 160, 100),      # Sunset warmth (comforting)
+            'soft_pink': (255, 200, 220),          # Gentle pink (soothing)
         }
         
         # Sound profiles mapped to actual audio files

@@ -2,6 +2,8 @@ import time
 import threading
 from datetime import datetime
 from enum import Enum
+import json
+import paho.mqtt.client as mqtt
 from sensors import SensorManager
 from actuators import ActuatorSystem
 import sys
@@ -15,15 +17,23 @@ class ComfortLevel(Enum):
     CRITICAL = "critical"
 
 class MainController:
-    def __init__(self):
+    def __init__(self, mqtt_broker="localhost", mqtt_port=1883):
         print("="*70)
         print("🚀 Comfort Sync AI - Initializing Main Controller")
         print("="*70)
         
         # Initialize components
         self.sensors = SensorManager()
-        self.actuators = ActuatorSystem()  # Changed from ActuatorController
+        self.actuators = ActuatorSystem()
         self.smartwatch = SmartWatchSimulator()
+        
+        # MQTT Setup for emotion detection
+        self.mqtt_broker = mqtt_broker
+        self.mqtt_port = mqtt_port
+        self.mqtt_client = mqtt.Client("ComfortSyncController")
+        self.mqtt_client.on_connect = self.on_mqtt_connect
+        self.mqtt_client.on_message = self.on_mqtt_message
+        self.mqtt_connected = False
         
         # Control state
         self.current_comfort_level = ComfortLevel.COMFORTABLE
@@ -42,8 +52,55 @@ class MainController:
         # Emotion data from laptop vision
         self.current_emotion = "neutral"
         self.emotion_lock = threading.Lock()
+        self.last_emotion_time = time.time()
+        
+        # Emotion to lighting mapping
+        self.emotion_lighting = {
+            'happy': {'color': 'cabin_evening', 'brightness': 180, 'description': 'Warm and welcoming'},
+            'neutral': {'color': 'cabin_day', 'brightness': 130, 'description': 'Comfortable neutral'},
+            'sad': {'color': 'warming_intense', 'brightness': 200, 'description': 'Warm comforting glow'},
+            'angry': {'color': 'cooling_intense', 'brightness': 180, 'description': 'Cool calming blue'},
+            'fear': {'color': 'calming_soft', 'brightness': 220, 'description': 'Soft reassuring light'},
+            'surprise': {'color': 'neutral_warm', 'brightness': 160, 'description': 'Gentle neutral'},
+            'disgust': {'color': 'nature_green', 'brightness': 150, 'description': 'Fresh natural green'},
+        }
+        
+        # Try to connect to MQTT
+        self.connect_mqtt()
         
         print("✓ Controller initialized successfully\n")
+    
+    def on_mqtt_connect(self, client, userdata, flags, rc):
+        if rc == 0:
+            self.mqtt_connected = True
+            print(f"✅ MQTT Connected to broker at {self.mqtt_broker}:{self.mqtt_port}")
+            # Subscribe to emotion topic
+            client.subscribe("emotion/data")
+            print("   📡 Subscribed to emotion/data")
+        else:
+            print(f"❌ MQTT Connection failed with code {rc}")
+    
+    def on_mqtt_message(self, client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode())
+            emotion = payload.get('emotion', 'neutral')
+            
+            with self.emotion_lock:
+                self.current_emotion = emotion
+                self.last_emotion_time = time.time()
+            
+            print(f"   😊 Emotion updated: {emotion}")
+        except Exception as e:
+            print(f"   ⚠️  MQTT message error: {e}")
+    
+    def connect_mqtt(self):
+        """Connect to MQTT broker for emotion data"""
+        try:
+            self.mqtt_client.connect(self.mqtt_broker, self.mqtt_port, 60)
+            self.mqtt_client.loop_start()
+        except Exception as e:
+            print(f"⚠️  MQTT connection failed: {e}")
+            print("   Controller will run without emotion detection")
     
     def calculate_discomfort_score(self, sensor_data, watch_data):
         """
@@ -123,51 +180,81 @@ class MainController:
         else:
             return ComfortLevel.COMFORTABLE
     
+    def get_emotion_based_lighting(self):
+        """Get lighting settings based on current emotion"""
+        with self.emotion_lock:
+            emotion = self.current_emotion
+            # Check if emotion data is recent (within last 10 seconds)
+            if time.time() - self.last_emotion_time > 10:
+                emotion = "neutral"
+        
+        return self.emotion_lighting.get(emotion, self.emotion_lighting['neutral'])
+    
     def apply_comfort_adjustments(self, comfort_level, sensor_data, watch_data, issues):
-        """Apply appropriate adjustments based on comfort level"""
+        """Apply appropriate adjustments based on comfort level AND emotion"""
+        
+        # Get emotion-based lighting preference
+        emotion_light = self.get_emotion_based_lighting()
         
         if comfort_level == ComfortLevel.CRITICAL:
             print("\n🔴 CRITICAL DISCOMFORT - Taking immediate action!")
             print(f"   Issues: {', '.join(issues)}")
+            print(f"   Emotion: {self.current_emotion} → Using emergency protocol")
             
-            # Emergency cooling/warming
+            # Critical situations override emotion
             if sensor_data['temperature'] > self.thresholds['temperature']['max']:
                 self.actuators.set_cabin_lighting('cooling_intense', brightness=255)
-                self.actuators.play_sound('calming_deep')
             else:
-                self.actuators.set_cabin_lighting('warming', brightness=255)
-                self.actuators.play_sound('calming_deep')
+                self.actuators.set_cabin_lighting('warming_intense', brightness=255)
+            
+            self.actuators.play_sound('calming_deep', volume=70)
         
         elif comfort_level == ComfortLevel.UNCOMFORTABLE:
             print("\n🟠 UNCOMFORTABLE - Applying comfort measures")
             print(f"   Issues: {', '.join(issues)}")
+            print(f"   Emotion: {self.current_emotion} → {emotion_light['description']}")
             
-            # Strong intervention
+            # Strong intervention with emotion consideration
             if watch_data['stress_level'] > 70:
-                if sensor_data['temperature'] > 25:
-                    self.actuators.set_cabin_lighting('cooling', brightness=220)
+                # High stress + negative emotion = strong calming
+                if self.current_emotion in ['angry', 'fear', 'sad']:
+                    self.actuators.set_cabin_lighting('calming_blue', brightness=220)
+                    self.actuators.play_sound('nature_calm', volume=60)
                 else:
-                    self.actuators.set_cabin_lighting('calming_blue', brightness=200)
-                self.actuators.play_sound('nature_calm')
+                    self.actuators.set_cabin_lighting('cooling', brightness=200)
+                    self.actuators.play_sound('ambient_soft', volume=50)
             else:
-                self.actuators.set_cabin_lighting('neutral_warm', brightness=180)
-                self.actuators.play_sound('ambient_soft')
+                # Use emotion-based lighting
+                self.actuators.set_cabin_lighting(emotion_light['color'], brightness=emotion_light['brightness'])
+                self.actuators.play_sound('ambient_soft', volume=40)
         
         elif comfort_level == ComfortLevel.MODERATE:
             print("\n🟡 MODERATE - Minor adjustments")
             print(f"   Issues: {', '.join(issues) if issues else 'Minor discomfort detected'}")
+            print(f"   Emotion: {self.current_emotion} → {emotion_light['description']}")
             
-            # Gentle adjustments
+            # Gentle adjustments based on emotion
             if watch_data['stress_level'] > 50:
-                self.actuators.set_cabin_lighting('calming_soft', brightness=150)
-                self.actuators.play_sound('ambient_soft')
+                if self.current_emotion == 'angry':
+                    self.actuators.set_cabin_lighting('cooling', brightness=160)
+                    self.actuators.play_sound('ambient_soft', volume=35)
+                elif self.current_emotion in ['sad', 'fear']:
+                    self.actuators.set_cabin_lighting('warming', brightness=180)
+                    self.actuators.play_sound('ambient_soft', volume=30)
+                else:
+                    self.actuators.set_cabin_lighting('calming_soft', brightness=150)
+                    self.actuators.play_sound('ambient_soft', volume=25)
             else:
-                self.actuators.set_cabin_lighting('cabin_day', brightness=130)
+                # Use emotion-based lighting
+                self.actuators.set_cabin_lighting(emotion_light['color'], brightness=emotion_light['brightness'])
                 self.actuators.stop_sound()
         
         else:  # COMFORTABLE
             print("\n🟢 COMFORTABLE - Maintaining optimal environment")
-            self.actuators.set_cabin_lighting('cabin_day', brightness=120)
+            print(f"   Emotion: {self.current_emotion} → {emotion_light['description']}")
+            
+            # Use emotion-based lighting for comfortable state
+            self.actuators.set_cabin_lighting(emotion_light['color'], brightness=emotion_light['brightness'])
             self.actuators.stop_sound()
     
     def update_emotion(self, emotion):
@@ -259,6 +346,11 @@ class MainController:
         
         if hasattr(self, 'control_thread'):
             self.control_thread.join(timeout=5)
+        
+        # Stop MQTT
+        if self.mqtt_connected:
+            self.mqtt_client.loop_stop()
+            self.mqtt_client.disconnect()
         
         self.actuators.cleanup()
         print("✓ Controller stopped")
