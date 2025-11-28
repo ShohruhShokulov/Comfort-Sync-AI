@@ -17,7 +17,7 @@ class ComfortLevel(Enum):
     CRITICAL = "critical"
 
 class MainController:
-    def __init__(self, mqtt_broker="localhost", mqtt_port=1883):
+    def __init__(self, mqtt_broker="127.0.0.1", mqtt_port=1883):
         print("="*70)
         print("🚀 Comfort Sync AI - Initializing Main Controller")
         print("="*70)
@@ -27,10 +27,10 @@ class MainController:
         self.actuators = ActuatorSystem()
         self.smartwatch = SmartWatchSimulator()
         
-        # MQTT Setup for emotion detection
+        # MQTT Setup for emotion detection - Match your working code
         self.mqtt_broker = mqtt_broker
         self.mqtt_port = mqtt_port
-        self.mqtt_client = mqtt.Client("ComfortSyncController")
+        self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_mqtt_connect
         self.mqtt_client.on_message = self.on_mqtt_message
         self.mqtt_connected = False
@@ -73,23 +73,29 @@ class MainController:
     def on_mqtt_connect(self, client, userdata, flags, rc):
         if rc == 0:
             self.mqtt_connected = True
-            print(f"✅ MQTT Connected to broker at {self.mqtt_broker}:{self.mqtt_port}")
-            # Subscribe to emotion topic
-            client.subscribe("emotion/data")
-            print("   📡 Subscribed to emotion/data")
+            print(f"✅ Connected successfully to Mosquitto Broker at {self.mqtt_broker}:{self.mqtt_port}")
+            # Subscribe to the topic the PC is publishing to
+            client.subscribe("vision/infer/mood")
+            print(f"   📡 Subscribed to topic: vision/infer/mood")
         else:
-            print(f"❌ MQTT Connection failed with code {rc}")
+            print(f"❌ Connection failed with code {rc}")
     
     def on_mqtt_message(self, client, userdata, msg):
         try:
+            # Decode the JSON payload
             payload = json.loads(msg.payload.decode())
-            emotion = payload.get('emotion', 'neutral')
+            
+            emotion = payload.get("emotion")
+            timestamp = payload.get("ts")
             
             with self.emotion_lock:
                 self.current_emotion = emotion
                 self.last_emotion_time = time.time()
             
-            print(f"   😊 Emotion updated: {emotion}")
+            print(f"\n   😊 NEW EMOTION DETECTED: {emotion}")
+            
+        except json.JSONDecodeError:
+            print(f"   ⚠️  Error decoding JSON payload: {msg.payload}")
         except Exception as e:
             print(f"   ⚠️  MQTT message error: {e}")
     
@@ -97,9 +103,10 @@ class MainController:
         """Connect to MQTT broker for emotion data"""
         try:
             self.mqtt_client.connect(self.mqtt_broker, self.mqtt_port, 60)
+            # Start the loop in background thread
             self.mqtt_client.loop_start()
         except Exception as e:
-            print(f"⚠️  MQTT connection failed: {e}")
+            print(f"⚠️  Could not start MQTT subscriber: {e}")
             print("   Controller will run without emotion detection")
     
     def calculate_discomfort_score(self, sensor_data, watch_data):
@@ -256,11 +263,6 @@ class MainController:
             # Use emotion-based lighting for comfortable state
             self.actuators.set_cabin_lighting(emotion_light['color'], brightness=emotion_light['brightness'])
             self.actuators.stop_sound()
-    
-    def update_emotion(self, emotion):
-        """Update emotion from vision system (called via MQTT or other means)"""
-        with self.emotion_lock:
-            self.current_emotion = emotion
     
     def control_loop(self):
         """Main control loop"""
