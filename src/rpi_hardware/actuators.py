@@ -89,6 +89,7 @@ class ActuatorSystem:
             'fireplace_crackling': 'data/fireplace.mp3',
             'uplifting_ambient': 'data/uplifting.mp3',
             'meditation_calm': 'data/meditation.mp3',
+            'rock': 'data/rock.mp3', 
         }
 
     def get_state(self):
