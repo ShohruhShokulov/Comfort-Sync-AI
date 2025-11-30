@@ -1,11 +1,14 @@
 import cv2
-import config
 import threading
 import time
 import json
 import paho.mqtt.client as mqtt
 from deepface import DeepFace
 
+# --- CONFIGURATION ---
+MQTT_BROKER = "165.246.80.166"  # REPLACE WITH YOUR PI'S IP ADDRESS
+MQTT_PORT = 1883
+TOPIC_EMOTION = "vision/infer/mood"
 
 # --- GLOBAL VARIABLES ---
 current_emotion = "neutral"

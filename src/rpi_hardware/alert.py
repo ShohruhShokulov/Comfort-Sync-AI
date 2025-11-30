@@ -1,226 +1,323 @@
 import time
 import sys
+import threading
+import json
+import paho.mqtt.client as mqtt
 sys.path.append('../simulate')
 from actuators import ActuatorSystem
 from sensors import SensorManager
 from data_generator import SmartWatchSimulator, StressScenario
 
-class AlertSystemDemo:
-    def __init__(self):
+class RealTimeAlertSystem:
+    def __init__(self, mqtt_broker="165.246.80.166", mqtt_port=1883):
+        print("="*70)
+        print("🚨 COMFORT SYNC AI - REAL-TIME DROWSINESS ALERT SYSTEM")
+        print("="*70)
+        print()
+        
+        # Initialize hardware
         self.actuators = ActuatorSystem()
         self.sensors = SensorManager()
         self.smartwatch = SmartWatchSimulator()
-        self.current_emotion = "neutral"
         
-    def get_emotion_from_stress(self, stress_level):
-        """Determine emotion based on stress level"""
-        if stress_level > 70:
-            return "😰 Fear/Anxious"
-        elif stress_level > 50:
-            return "😟 Stressed"
-        elif stress_level > 30:
-            return "😐 Neutral"
-        elif stress_level < 20:
-            return "😴 Drowsy"
-        else:
-            return "😊 Happy"
+        # MQTT Setup
+        self.mqtt_broker = mqtt_broker
+        self.mqtt_port = mqtt_port
+        self.mqtt_client = mqtt.Client(client_id="AlertSystem")
+        self.mqtt_client.on_connect = self.on_mqtt_connect
+        self.mqtt_client.on_message = self.on_mqtt_message
+        self.mqtt_connected = False
         
-    def wait_for_acknowledgment(self):
-        """Wait for user to press Enter to acknowledge alert"""
-        print("\n" + "="*70)
-        print("⚠️  ALERT WILL CONTINUE UNTIL ACKNOWLEDGED")
-        print("="*70)
-        print("\n   🔘 Press ENTER to acknowledge alert and stop alarm")
-        print("   ⚠️  Alert will NOT stop automatically...\n")
+        # Alert state
+        self.alert_active = False
+        self.alert_acknowledged = False
+        self.current_alert_type = None
+        self.drowsiness_data = {
+            'blinks': 0,
+            'microsleeps': 0.0,
+            'yawns': 0,
+            'yawn_duration': 0.0,
+            'alert': ''
+        }
         
-        start_time = time.time()
+        # System state
+        self.running = False
+        self.normal_mode_active = True
         
-        # Show alert status while waiting
-        print("   🚨 Waiting for acknowledgment...", end='')
-        sys.stdout.flush()
+        # Connect to MQTT
+        self.connect_mqtt()
         
-        # Wait for Enter key
-        input()
-        
-        elapsed = int(time.time() - start_time)
-        print(f"\n\n   ✅ Alert acknowledged after {elapsed} seconds!")
-        return True
+        print("✓ Alert System initialized\n")
     
-    def run_demo(self):
-        """Run realistic alert system demonstration with drowsiness detection"""
-        print("="*70)
-        print("🚨 COMFORT SYNC AI - DROWSINESS ALERT DEMO")
-        print("="*70)
-        print("\nSimulating real-time cabin monitoring")
-        print("Monitoring: Heart Rate, Stress, Temperature, Humidity, Air Quality, Emotion")
-        print("\n")
-        
-        # Phase 1: Normal Driving (10 seconds - 5 readings at 2s intervals)
+    def on_mqtt_connect(self, client, userdata, flags, rc):
+        if rc == 0:
+            self.mqtt_connected = True
+            print(f"✅ MQTT Connected to broker at {self.mqtt_broker}:{self.mqtt_port}")
+            client.subscribe("vision/infer/drowsiness")
+            print("   📡 Subscribed to: vision/infer/drowsiness\n")
+        else:
+            print(f"❌ MQTT Connection failed with code {rc}\n")
+    
+    def on_mqtt_message(self, client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode())
+            
+            self.drowsiness_data = {
+                'blinks': payload.get("blinks", 0),
+                'microsleeps': payload.get("microsleeps", 0.0),
+                'yawns': payload.get("yawns", 0),
+                'yawn_duration': payload.get("yawn_duration", 0.0),
+                'alert': payload.get("alert", "")
+            }
+            
+            # Check if alert should be triggered
+            alert_type = self.drowsiness_data['alert']
+            
+            if alert_type in ['prolonged_microsleep'] and not self.alert_active:
+                print(f"\n{'='*70}")
+                print(f"🚨 DROWSINESS ALERT TRIGGERED: {alert_type.upper()}")
+                print(f"{'='*70}")
+                self.trigger_alert(alert_type)
+            
+        except Exception as e:
+            print(f"⚠️  MQTT message error: {e}")
+    
+    def connect_mqtt(self):
+        """Connect to MQTT broker"""
+        try:
+            self.mqtt_client.connect(self.mqtt_broker, self.mqtt_port, 60)
+            self.mqtt_client.loop_start()
+        except Exception as e:
+            print(f"⚠️  Could not connect to MQTT broker: {e}")
+            print("   System will run in demo mode without vision data\n")
+    
+    def start_normal_mode(self):
+        """Start normal comfortable driving mode"""
         print("─"*70)
         print("✅ NORMAL DRIVING MODE")
         print("─"*70)
         
         self.smartwatch.set_scenario(StressScenario.NORMAL)
         
-        # Stop any previous music
+        # Stop any previous audio
         self.actuators.stop_sound()
         time.sleep(0.3)
         
+        # Set comfortable ocean blue environment
         self.actuators.set_cabin_lighting('ocean_blue', brightness=180)
-        self.actuators.play_sound('uplifting_ambient', volume=40)
+        self.actuators.play_sound('ocean_waves', volume=35)
         
         print("   💙 Ocean blue ambient lighting")
-        print("   🎵 Uplifting ambient music playing")
-        print("   🚗 Driver alert and comfortable\n")
+        print("   🎵 Ambient music playing")
+        print("   🚗 Monitoring driver state...\n")
         
-        # Show normal readings for 5 iterations (10 seconds total)
-        for i in range(5):
-            sensor_data = self.sensors.read_all()
-            watch_data = self.smartwatch.get_data()
-            emotion = self.get_emotion_from_stress(watch_data['stress_level'])
-            
-            print(f"   [{i+1}/5] Monitoring...")
-            print(f"      🌡️  Temperature: {sensor_data['temperature']:.1f}°C")
-            print(f"      💧 Humidity: {sensor_data['humidity']:.0f}%")
-            print(f"      💨 Air Quality: {sensor_data['air_quality']} PPM")
-            print(f"      ❤️  Heart Rate: {watch_data['heart_rate']} bpm")
-            print(f"      📊 Stress: {watch_data['stress_level']:.1f}%")
-            print(f"      {emotion}")
-            print(f"      ✅ Status: Normal\n")
-            
-            time.sleep(2)
+        self.normal_mode_active = True
+    
+    def trigger_alert(self, alert_type):
+        """Trigger emergency alert"""
+        self.alert_active = True
+        self.alert_acknowledged = False
+        self.current_alert_type = alert_type
+        self.normal_mode_active = False
         
-        # Phase 2: Detecting Drowsiness (Transition)
-        print("\n" + "─"*70)
-        print("⚠️  DROWSINESS DETECTED!")
-        print("─"*70)
+        # Get current sensor data
+        sensor_data = self.sensors.read_all()
+        watch_data = self.smartwatch.get_data()
         
-        # Simulate drowsiness scenario
-        print("\n   📉 Heart rate dropping...")
-        print("   😴 Reduced alertness detected")
-        print("   🔍 Analyzing driver state...")
-        time.sleep(2)
+        print(f"\n   🚨 CRITICAL DROWSINESS DETECTED!")
+        print(f"   📊 Drowsiness Stats:")
+        print(f"      👁️  Blinks: {self.drowsiness_data['blinks']}")
+        print(f"      💤 Microsleeps: {self.drowsiness_data['microsleeps']:.2f} sec")
+        print(f"      😮 Yawns: {self.drowsiness_data['yawns']}")
+        print(f"      ⏳ Yawn Duration: {self.drowsiness_data['yawn_duration']:.2f} sec")
         
-        # Show critical readings
-        print("\n   🚨 CRITICAL READINGS:")
-        print("      ❤️  Heart Rate: 55 bpm (TOO LOW)")
-        print("      📊 Stress: 15% (DROWSY STATE)")
-        print("      🌡️  Temperature: 27°C (TOO WARM)")
-        print("      💧 Humidity: 65% (HIGH)")
-        print("      💨 Air Quality: 280 PPM (POOR)")
-        print("      😴 Emotion: Drowsy")
-        print("      ⏰ Time: 02:30 AM (HIGH RISK HOUR)")
+        print(f"\n   📈 Biometric & Environmental Data:")
+        print(f"      ❤️  Heart Rate: {watch_data['heart_rate']} bpm")
+        print(f"      📊 Stress Level: {watch_data['stress_level']:.1f}%")
+        print(f"      🌡️  Temperature: {sensor_data['temperature']:.1f}°C")
+        print(f"      💧 Humidity: {sensor_data['humidity']:.0f}%")
+        print(f"      💨 Air Quality: {sensor_data['air_quality']} PPM")
         
-        time.sleep(2)
+        print(f"\n   ⚠️  ALERT TYPE: {alert_type.replace('_', ' ').upper()}")
         
-        # Phase 3: EMERGENCY ALERT ACTIVATION (Continues until Enter pressed)
-        print("\n" + "="*70)
-        print("🚨🚨🚨 EMERGENCY ALERT ACTIVATED! 🚨🚨🚨")
-        print("="*70)
-        print("\n   ⚠️  DROWSINESS ALERT: DRIVER ATTENTION REQUIRED")
-        print("   ⚠️  PULLING OVER RECOMMENDED")
-        print("   ⚠️  EMERGENCY PROTOCOL INITIATED")
-        
-        # Stop music and activate emergency
+        # Stop normal music and activate emergency
         self.actuators.stop_sound()
         time.sleep(0.3)
         
         self.actuators.activate_emergency_protocol()
         
         print("\n   🔴 RED FLASHING LIGHTS → Activated")
-        print("   🔊 ALERT SOUND → Playing (CONTINUOUS)")
+        print("   🔊 LOUD ALERT SOUND → Playing (CONTINUOUS)")
         print("   💨 VENTILATION → Maximum")
         print("   ❄️  COOLING → Activated")
-        print("   📢 VOICE ALERT → 'Please pull over safely'")
+        print("   📢 RECOMMENDATION: Pull over safely")
         
-        # Wait for user to press Enter (alert continues)
-        self.wait_for_acknowledgment()
+        print("\n" + "="*70)
+        print("⚠️  ALERT WILL CONTINUE UNTIL ACKNOWLEDGED")
+        print("="*70)
+        print("\n   🔘 Press ENTER to acknowledge alert and activate anti-fatigue mode")
+        print("   ⚠️  Alert will NOT stop automatically...\n")
         
-        # Phase 4: Alert Acknowledged - Anti-Fatigue Mode with Rock Music
+        # Wait for acknowledgment in separate thread
+        ack_thread = threading.Thread(target=self.wait_for_acknowledgment, daemon=True)
+        ack_thread.start()
+    
+    def wait_for_acknowledgment(self):
+        """Wait for user to acknowledge alert"""
+        print("   🚨 Waiting for acknowledgment...", end='')
+        sys.stdout.flush()
+        
+        start_time = time.time()
+        input()  # Wait for Enter key
+        
+        elapsed = int(time.time() - start_time)
+        self.alert_acknowledged = True
+        
+        print(f"\n\n   ✅ Alert acknowledged after {elapsed} seconds!")
+        
+        # Activate anti-fatigue mode
+        self.activate_anti_fatigue_mode()
+    
+    def activate_anti_fatigue_mode(self):
+        """Activate energizing anti-fatigue environment"""
         print("\n" + "─"*70)
         print("✅ ALERT ACKNOWLEDGED - ACTIVATING ANTI-FATIGUE MODE")
         print("─"*70)
         
         print("\n   👍 Driver acknowledged alert")
-        print("   🅿️  Vehicle pulled over safely")
+        print("   🅿️  Vehicle should pull over safely")
         print("   ⚡ Activating energizing environment to combat fatigue...\n")
         
         time.sleep(1)
         
-        # Stop emergency and activate ENERGIZING environment
+        # Stop emergency
         self.actuators.emergency_active = False
         self.actuators.stop_sound()
         time.sleep(0.5)
         
-        # ENERGIZING MODE - Bright yellow light + ROCK MUSIC
+        # ENERGIZING MODE - Bright yellow + Rock/Energizing music
         self.actuators.set_cabin_lighting('energizing_yellow', brightness=220)
         self.actuators.play_sound('rock', volume=60)
         
         print("   ⚡ ANTI-FATIGUE MODE ACTIVATED")
         print("   ═" * 35)
         print("\n   🌟 Bright energizing yellow lighting (220 brightness)")
-        print("   🎸 ROCK MUSIC playing (energizing)")
-        print("   ❄️  Cool air circulation (18°C target)")
+        print("   🎸 Energizing music playing (loud)")
+        print("   ❄️  Cool air circulation activated")
         print("   💨 Fresh air ventilation (maximum)")
-        print("   ☕ Recommended: Take a 15-minute energizing break")
+        print("   ☕ Recommended: Take a 15-minute break")
         
         print("\n   💡 FATIGUE REDUCTION TIPS:")
         print("      • Stretch your legs and arms")
-        print("      • Drink cold water")
-        print("      • Walk around for 5 minutes")
+        print("      • Drink cold water or coffee")
+        print("      • Walk around for 5-10 minutes")
         print("      • Deep breathing exercises")
-        print("      • Face washing with cold water")
+        print("      • Wash face with cold water")
         
-        print("\n   🎸 Rock music will play continuously...")
-        print("   ⌨️  Press Ctrl+C to stop when ready\n")
+        print("\n   🎸 Energizing music will continue playing...")
+        print("   ⌨️  System will return to normal mode automatically\n")
         
-        # Keep rock music playing continuously until user stops
+        # Reset alert state after acknowledgment
+        self.alert_active = False
+        self.current_alert_type = None
+        
+        # Keep anti-fatigue mode for 30 seconds before returning to normal
+        time.sleep(30)
+        
+        if not self.alert_active:  # If no new alert triggered
+            print("\n   🔄 Returning to normal mode...\n")
+            self.start_normal_mode()
+    
+    def monitoring_loop(self):
+        """Main monitoring loop"""
+        iteration = 0
+        
+        print("▶️  Starting Real-Time Monitoring")
+        print("="*70 + "\n")
+        
         try:
-            while True:
-                time.sleep(1)
+            while self.running:
+                if self.normal_mode_active and not self.alert_active:
+                    # Normal monitoring
+                    sensor_data = self.sensors.read_all()
+                    watch_data = self.smartwatch.get_data()
+                    
+                    if iteration % 5 == 0:  # Print status every 10 seconds
+                        print(f"📊 Monitoring Status (Iteration {iteration + 1})")
+                        print(f"   🌡️  Temp: {sensor_data['temperature']:.1f}°C | "
+                              f"💧 Humidity: {sensor_data['humidity']:.0f}% | "
+                              f"💨 Air: {sensor_data['air_quality']} PPM")
+                        print(f"   ❤️  Heart Rate: {watch_data['heart_rate']} bpm | "
+                              f"📊 Stress: {watch_data['stress_level']:.1f}%")
+                        
+                        if self.mqtt_connected:
+                            print(f"   👁️  Blinks: {self.drowsiness_data['blinks']} | "
+                                  f"💤 Microsleeps: {self.drowsiness_data['microsleeps']:.1f}s | "
+                                  f"😮 Yawns: {self.drowsiness_data['yawns']}")
+                        
+                        print(f"   ✅ Status: Normal\n")
+                
+                iteration += 1
+                time.sleep(2)
+                
         except KeyboardInterrupt:
-            print("\n\n   🛑 User stopped the demo")
+            print("\n\n⚠️  System stopped by user")
+    
+    def start(self):
+        """Start the alert system"""
+        if self.running:
+            print("⚠️  System already running")
+            return
         
-        print("\n" + "="*70)
-        print("✅ DROWSINESS ALERT DEMO COMPLETE!")
-        print("="*70)
-        print("\n📊 Summary:")
-        print("   ✓ Normal monitoring (10s): Ocean blue + Ambient music")
-        print("   ✓ Drowsiness detected: Low heart rate, high humidity, drowsy emotion")
-        print("   ✓ Emergency alert: Red flashing + Loud alarm (until Enter pressed)")
-        print("   ✓ Anti-fatigue mode: Bright yellow + Rock music (continuous)")
+        self.running = True
         
-        print("\n💡 System Features Demonstrated:")
-        print("   • Real-time biometric monitoring")
-        print("   • Environmental monitoring (temp, humidity, air quality)")
-        print("   • Emotion detection from stress levels")
-        print("   • Automatic drowsiness detection")
-        print("   • Continuous alert until acknowledgment")
-        print("   • Keyboard-controlled alert stop (Enter key)")
-        print("   • Rock music for active fatigue recovery")
+        # Start in normal mode
+        self.start_normal_mode()
         
-        print("\n👋 Demo finished. Cleaning up...\n")
+        # Start monitoring loop in separate thread
+        self.monitor_thread = threading.Thread(target=self.monitoring_loop, daemon=True)
+        self.monitor_thread.start()
         
-        # Final cleanup
-        self.actuators.stop_sound()
-        time.sleep(0.3)
+        print("✓ Alert System started\n")
+    
+    def stop(self):
+        """Stop the alert system"""
+        print("\n🛑 Stopping alert system...")
+        self.running = False
+        self.alert_active = False
+        self.actuators.emergency_active = False
+        
+        if hasattr(self, 'monitor_thread'):
+            self.monitor_thread.join(timeout=5)
+        
+        # Stop MQTT
+        if self.mqtt_connected:
+            self.mqtt_client.loop_stop()
+            self.mqtt_client.disconnect()
+        
         self.actuators.cleanup()
+        print("✓ Alert System stopped")
+
 
 if __name__ == "__main__":
-    print("\n🎬 Starting Drowsiness Alert Demo in 3 seconds...")
+    print("\n🎬 Starting Real-Time Drowsiness Alert System...")
+    print("   Waiting for drowsiness detection data from vision system")
     print("   Press Ctrl+C to stop at any time\n")
-    time.sleep(3)
+    time.sleep(2)
     
     try:
-        demo = AlertSystemDemo()
-        demo.run_demo()
+        alert_system = RealTimeAlertSystem()
+        alert_system.start()
+        
+        # Keep main thread alive
+        while True:
+            time.sleep(1)
+            
     except KeyboardInterrupt:
-        print("\n\n⚠️  Demo stopped by user")
-        demo = AlertSystemDemo()
-        demo.actuators.emergency_active = False
-        demo.actuators.stop_sound()
-        demo.actuators.cleanup()
+        print("\n\n⚠️  System stopped by user")
+        alert_system.stop()
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
         traceback.print_exc()
+        alert_system.stop()
